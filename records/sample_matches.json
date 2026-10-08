@@ -1,0 +1,48 @@
+[
+ {
+  "id": "sample-1",
+  "startedAt": "2026-10-08T12:00:00.000Z",
+  "endedAt": "2026-10-08T12:25:00.000Z",
+  "myName": "示例玩家",
+  "myGeneralID": 1004,
+  "minions": [1, 2, 3, 4],
+  "rank": 1,
+  "rankCandidates": {"selfInfoRank": 1, "aliveCount": 1, "myHp": 21},
+  "rounds": {
+   "3": {"round": 3, "coins": [3, 6], "level": 2, "hp": 40, "shop": [21101011, 21101021], "lineup": [21101021]},
+   "9": {"round": 9, "coins": [12], "level": 4, "hp": 32, "shop": [21101161], "lineup": [21101021, 21101161]}
+  },
+  "myLineupFinal": [21101021, 21101161, 21101201, 21101221, 21101111, 21101081, 21101091],
+  "opponents": {
+   "小杀2#1006#7": {"name": "小杀2", "generalID": 1006, "hp": 30, "level": 4, "round": 9,
+     "pieces": [{"chessID": 21102091}, {"chessID": 21102191}, {"chessID": 21102161}]}
+  },
+  "finalPlayers": [
+   {"seat": 1, "name": "示例玩家", "generalID": 1004, "hp": 21, "level": 6, "dead": false, "isSelf": true},
+   {"seat": 2, "name": "小杀2", "generalID": 1006, "hp": 0, "level": 6, "dead": true, "isSelf": false},
+   {"seat": 3, "name": "小杀3", "generalID": 1008, "hp": 0, "level": 5, "dead": true, "isSelf": false}
+  ]
+ },
+ {
+  "id": "sample-2",
+  "startedAt": "2026-10-08T13:00:00.000Z",
+  "endedAt": "2026-10-08T13:24:00.000Z",
+  "myName": "示例玩家",
+  "myGeneralID": 1006,
+  "minions": [2, 4, 6, 7],
+  "rank": 3,
+  "rankCandidates": {"selfInfoRank": 3, "aliveCount": 3, "myHp": 0},
+  "rounds": {
+   "3": {"round": 3, "coins": [1], "level": 2, "hp": 40, "shop": [21102021], "lineup": [21102021]}
+  },
+  "myLineupFinal": [21102021, 21102091, 21102161, 21102191, 21102071, 21102051, 21102081],
+  "opponents": {
+   "小杀5#1008#7": {"name": "小杀5", "generalID": 1008, "hp": 26, "level": 5, "round": 10,
+     "pieces": [{"chessID": 21103191}, {"chessID": 21103161}, {"chessID": 21103151}, {"chessID": 21103101}]}
+  },
+  "finalPlayers": [
+   {"seat": 1, "name": "示例玩家", "generalID": 1006, "hp": 0, "level": 6, "dead": true, "isSelf": true},
+   {"seat": 2, "name": "小杀5", "generalID": 1008, "hp": 18, "level": 6, "dead": false, "isSelf": false}
+  ]
+ }
+]

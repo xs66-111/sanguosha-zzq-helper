@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>三国杀自走棋 定阵与运营助手</title>
+<style>
+  :root{
+    --bg:#14161c; --panel:#1c1f27; --panel2:#232733; --line:#31364a;
+    --text:#e8eaf0; --dim:#9aa2b8; --gold:#e8c46a; --red:#e2604f; --green:#5fbf8f;
+    --blue:#6aa9e8; --purple:#a98ae0;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 "Microsoft YaHei","PingFang SC",sans-serif}
+  header{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  h1{font-size:18px;margin:0;color:var(--gold)}
+  .meta{color:var(--dim);font-size:12px}
+  nav{display:flex;gap:6px;padding:10px 18px 0;flex-wrap:wrap}
+  nav button{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 14px;cursor:pointer;font-size:14px}
+  nav button.on{background:var(--gold);color:#2a2313;border-color:var(--gold);font-weight:700}
+  main{padding:16px 18px 60px;max-width:1280px}
+  section{display:none} section.on{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:14px}
+  .card h2{font-size:15px;margin:0 0 10px;color:var(--gold)}
+  .card h3{font-size:13px;margin:14px 0 6px;color:var(--blue)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .chip{border:1px solid var(--line);background:var(--panel2);border-radius:999px;padding:4px 12px;cursor:pointer;user-select:none;font-size:13px}
+  .chip.on{background:var(--gold);color:#2a2313;border-color:var(--gold);font-weight:700}
+  .chip.ban{opacity:.35;text-decoration:line-through}
+  select,input[type=number],input[type=text]{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:13px}
+  input[type=number]{width:78px}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{border:1px solid var(--line);padding:5px 8px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:var(--dim);font-weight:600;white-space:nowrap}
+  tr:hover td{background:#20243455}
+  .num{text-align:right;font-variant-numeric:tabular-nums}
+  .tag{display:inline-block;border-radius:4px;padding:1px 6px;font-size:11px;margin-right:4px;background:#2c3142;color:var(--dim)}
+  .tag.m1{background:#3a2f2a;color:#e2a15f}.tag.m2{background:#2c3a2f;color:#79cf94}
+  .tag.m3{background:#26313f;color:#79aee0}.tag.m4{background:#39283f;color:#c08fe0}
+  .tag.m5{background:#3f3a26;color:#ded06f}.tag.m6{background:#3f2a2a;color:#e58b8b}
+  .tag.m7{background:#3f3626;color:#e0bb79}.tag.m8{background:#2f3a3f;color:#7fc8d6}
+  .rank{color:var(--gold);font-weight:700}
+  .bar{height:9px;background:var(--panel2);border-radius:4px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:linear-gradient(90deg,#8a6a2a,var(--gold))}
+  .score{font-weight:700;color:var(--gold);font-variant-numeric:tabular-nums}
+  .muted{color:var(--dim);font-size:12px}
+  .warn{background:#3a2a26;border:1px solid #6a4034;border-radius:8px;padding:10px 12px;color:#f0c3a8;font-size:13px}
+  .tip{background:#1f2733;border-left:3px solid var(--blue);padding:8px 12px;border-radius:0 6px 6px 0;font-size:13px;margin:8px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+  .kv{display:flex;justify-content:space-between;border-bottom:1px dashed #2b3040;padding:3px 0;font-size:13px}
+  .kv span:last-child{color:var(--gold);font-variant-numeric:tabular-nums}
+  .lineup{display:flex;gap:8px;flex-wrap:wrap}
+  .slot{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:104px;font-size:12px}
+  .slot b{display:block;font-size:13px;color:var(--text)}
+  .slot .r{color:var(--gold)}
+  code{background:#0f1117;padding:1px 6px;border-radius:4px;color:#cfe3ff}
+  details summary{cursor:pointer;color:var(--blue);font-size:13px}
+  footer{color:var(--dim);font-size:12px;padding:0 18px 30px}
+  a{color:var(--blue)}
+</style>
+</head>
+<body>
+<header>
+  <h1>三国杀自走棋 · 定阵与运营助手</h1>
+  <div class="meta" id="meta"></div>
+</header>
+<nav>
+  <button data-tab="plan" class="on">本局决策</button>
+  <button data-tab="dex">棋子图鉴</button>
+  <button data-tab="econ">运营 / 经济</button>
+  <button data-tab="about">说明 / 更新数据</button>
+</nav>
+<main>
+
+<!-- ================= 本局决策 ================= -->
+<section id="plan" class="on">
+  <div class="card">
+    <h2>① 本局可用阵营（游戏内开局界面显示的那几个势力）</h2>
+    <div class="row" id="minionChips"></div>
+    <div class="row" style="margin-top:8px">
+      <button class="chip" onclick="randomPick(4)">随机留 4 个</button>
+      <button class="chip" onclick="randomPick(5)">随机留 5 个</button>
+      <button class="chip" onclick="randomPick(6)">随机留 6 个</button>
+      <button class="chip" onclick="selectAll()">全选</button>
+      <span class="muted">点一下=本局有，再点一下=被禁用</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>② 你的主公与当前局面</h2>
+    <div class="row">
+      <label>主公 <select id="generalSel" style="min-width:220px"></select></label>
+      <label>回合 <input type="number" id="roundNo" value="6" min="1" max="40"></label>
+      <label>营帐等级 <select id="shopLv"></select></label>
+      <label>虎符 <input type="number" id="coinNo" value="20" min="0" max="200"></label>
+      <label>主公体力 <input type="number" id="hpNo" value="40" min="1" max="60"></label>
+    </div>
+    <div class="muted" id="generalInfo" style="margin-top:6px"></div>
+  </div>
+
+  <div class="card">
+    <h2>③ 阵营强度榜（本局可用阵营）</h2>
+    <div id="ranking"></div>
+    <details style="margin-top:10px">
+      <summary>评分口径与权重（可改，存在本地）</summary>
+      <div class="row" id="weights" style="margin-top:8px"></div>
+      <div class="muted" style="margin-top:6px">
+        分数 = 数值分×权重 + 高星核心分×权重 + 协同分×权重 + 经济分×权重 + 版本调整。
+        分数只用于排序参考，具体到某一局还要看发牌和对手。
+      </div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>④ 推荐打法</h2>
+    <div id="advice"></div>
+  </div>
+
+  <div class="card">
+    <h2>⑤ 目标：保前四 / 争第一</h2>
+    <div class="grid">
+      <div class="card" style="margin:0">
+        <h3>保前四（稳分打法）</h3>
+        <div class="tip">全程优先<b>战力即时性</b>：营帐等级跟上大部队即可，能赢就赢，血量健康时不用为了吃鸡赌大牌。</div>
+        <div class="tip">每回合留 1~2 张能立刻上场的对子，宁愿吃 2 星打工牌也不要空着位置。</div>
+        <div class="tip">血量低于一半后停止存钱：该刷新刷新、该升营帐升营帐，先把命保住。</div>
+        <div class="tip">观察同桌中同样在抢你主力的玩家：超过 2 家就换次优阵营，避免三家分牌池。</div>
+      </div>
+      <div class="card" style="margin:0">
+        <h3>争第一（上限打法）</h3>
+        <div class="tip">前中期用低星对子保血，<b>把虎符留给 5~6 星核心</b>，等拿到核心再一口气吃三连升金。</div>
+        <div class="tip">金色卡 = 3 张同名 + 额外三选一，收益远大于多上一张杂牌，所以主力阵营的牌别随便遣散。</div>
+        <div class="tip">装备（第 3/7/11 回合）尽量集中在 1~2 个能持续吃属性的核心身上。</div>
+        <div class="tip">残局（剩 2~3 家）看对手阵容调站位：先手位给开战/当先卡，遗计/阵亡收益卡往前放，经济卡藏后面。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ================= 图鉴 ================= -->
+<section id="dex">
+  <div class="card">
+    <h2>棋子图鉴</h2>
+    <div class="row">
+      <input type="text" id="dexSearch" placeholder="搜武将名 / 技能关键字" style="width:260px">
+      <span>星级</span><span id="dexRank"></span>
+      <span>排序</span>
+      <select id="dexSort">
+        <option value="rank">按星级</option>
+        <option value="score">按评分</option>
+        <option value="stat">按数值(攻+体)</option>
+        <option value="name">按名字</option>
+      </select>
+    </div>
+    <div class="row" id="dexMinions" style="margin-top:8px"></div>
+    <div style="margin-top:8px" class="muted" id="dexCount"></div>
+    <div style="overflow:auto;max-height:70vh;margin-top:8px"><table id="dexTable"></table></div>
+  </div>
+</section>
+
+<!-- ================= 运营 ================= -->
+<section id="econ">
+  <div class="card">
+    <h2>营帐等级 / 刷新概率</h2>
+    <div style="overflow:auto"><table id="shopTable"></table></div>
+    <div class="tip">
+      概率为该等级每次刷新单个格子的出牌权重（配置表原始值，同一等级内归一化后才是百分比）。
+      <b>6 级才有 6 星与神将</b>，5 级是 4~5 星主力档；6 级那一行权重是千分制，且 2 星必定出现。
+    </div>
+  </div>
+  <div class="card">
+    <h2>经济与规则（配置表原文）</h2>
+    <div id="econKv" class="grid"></div>
+    <div class="tip">
+      基础收入每回合递增；利息按虎符存量计算（<code>ProfitIncrement</code> 每档 +1，上限 <code>MaxProfit</code>）。
+      刷一次 <code>RefreshCost</code> 虎符，买 1 张 <code>ChessPrice</code> 虎符，遣散回收 <code>SoldPrice</code> 虎符。
+    </div>
+  </div>
+  <div class="card">
+    <h2>对局阶段与机制</h2>
+    <div id="rules"></div>
+  </div>
+</section>
+
+<!-- ================= 说明 ================= -->
+<section id="about">
+  <div class="card">
+    <h2>数据是怎么来的</h2>
+    <p>本工具的数据不是抄攻略，而是直接从《三国杀·一将成名》客户端（Steam 版《三国杀》也是同一个网页端内核）拉取的官方配置：</p>
+    <ol>
+      <li>下载官方资源站的 <code>Config.sgs</code> 配置包与 <code>resc</code> 解密模块；</li>
+      <li>用本地跑起来的 wasm 模块做一次 OFB 解密，得到明文配置；</li>
+      <li>取出 <code>TavernChessConfig.sgs</code>（酒馆自走棋配置），解析成棋子、主公、营帐概率、经济参数。</li>
+    </ol>
+    <p>所以棋子数值、技能描述、概率表、主公技能这些都是当前版本的原样数据，赛季更新后重跑一次脚本即可刷新。</p>
+  </div>
+  <div class="card">
+    <h2>关于“每局禁用阵营”</h2>
+    <div class="warn">
+      客户端配置里并没有写死“禁 2 个”，而是服务端在开局时下发本局阵营列表
+      （协议字段 <code>chessMinionTypList</code>，注释就是“本局阵营”）。
+      人机/新手自定义的默认值是 <b>4 个阵营</b>、其余为锁定（不出现）。
+      所以你只要按游戏里开局界面实际显示的几个势力在工具里点选即可，工具会自动只在这些阵营里给你排名和建议。
+    </div>
+  </div>
+  <div class="card">
+    <h2>游戏内浮窗版（像小抄一样贴在游戏里）</h2>
+    <p>同一个客户端是 Chromium 套壳，所以可以像「小抄」那样注入一段脚本，直接在游戏右上角显示助手：本局阵营、商店每张牌该不该买、三连进度、该升营帐还是该刷牌。</p>
+    <ol>
+      <li>双击本文件夹里的 <code>启动并注入.bat</code>（它会用调试端口启动客户端并自动注入）；</li>
+      <li>进入自走棋，右上角出现「🎲 自走棋助手」面板；拖动标题栏可以移动，<code>Alt+H</code> 隐藏/显示；</li>
+      <li>想先看效果又不想开游戏：直接打开 <code>game_overlay/demo.html</code>，那是用假局面渲染的同款浮窗。</li>
+    </ol>
+    <p class="muted">浮窗是只读的：只读取本局阵营/商店/手牌/虎符并给建议，不会替你买牌或刷新。</p>
+  </div>
+  <div class="card">
+    <h2>怎么更新数据（新赛季/平衡性调整后）</h2>
+    <ol>
+      <li>确保装了 Python 3，并执行一次 <code>python -m pip install wasmtime</code>；</li>
+      <li>在本文件夹下运行 <code>python tools/update_data.py</code>，它会自动联网拉最新配置并重写 <code>data/tavernchess.js</code>；</li>
+      <li>重新打开本页面即可。</li>
+    </ol>
+    <p class="muted">如果下载失败，也可以自己另存 <code>https://web.sanguosha.com/10/pc/res/config/Config.sgs</code>，然后运行 <code>python tools/update_data.py --config 路径</code>。</p>
+  </div>
+</section>
+
+</main>
+<footer>数据来自游戏客户端配置表，仅供个人理解机制与决策参考。打牌的是你，不是我。</footer>
+
+<script src="data/tavernchess.js"></script>
+<script>
+/* ============================== 基础 ============================== */
+const D = window.TC_DATA;
+if (!D) { document.body.insertAdjacentHTML('afterbegin',
+  '<div class="card" style="margin:16px">没找到 data/tavernchess.js，请先在文件夹里运行 <code>python tools/update_data.py</code> 生成数据。</div>'); }
+
+const MN = D ? D.minionNames : {};
+const PIECES = D ? D.pieces : [];
+const GENERALS = D ? D.generals : [];
+const MINIONS = D ? D.minions : [];
+
+document.getElementById('meta').textContent =
+  D ? `数据：${D.seasonName}（第 ${D.seasonId} 赛季）｜棋子 ${PIECES.length} 张｜主公 ${GENERALS.length} 位｜生成于 ${D.generatedAt}` : '';
+
+/* ============================== 评分 ============================== */
+const DEFAULT_W = { stat: 1.0, core: 0.9, synergy: 0.5, econ: 0.6 };
+let W = Object.assign({}, DEFAULT_W, JSON.parse(localStorage.getItem('tc_weights') || '{}'));
+const saveW = () => localStorage.setItem('tc_weights', JSON.stringify(W));
+
+// 版本手感调整：配置文件里算不出来、只写在更新公告里的东西。
+// 默认只给 S11「蜀势力整套重做（志继机制 + 关羽/关兴/张苞/张飞/黄忠/法正/姜维/刘禅等大改）」+8，其余 0。
+// 想按自己的手感调，直接在下面的输入框里改。
+const DEFAULT_PATCH = { '魏': 0, '蜀': 8, '吴': 0, '群': 0, '黄巾': 0, '汉': 0, '西凉': 0, '袁': 0 };
+let PATCH = Object.assign({}, DEFAULT_PATCH, JSON.parse(localStorage.getItem('tc_patch') || '{}'));
+const savePatch = () => localStorage.setItem('tc_patch', JSON.stringify(PATCH));
+
+// 单卡关键词打分：把技能文本翻译成一个粗略的“这卡值不值钱”
+function cardScore(p){
+  let s = p.rank * 6 + (p.atk + p.hp) * 0.8;
+  const t = p.skill || '';
+  const hit = (kw, v, label) => { if (t.includes(kw)) { s += v; tags.push(label); } };
+  const tags = [];
+  hit('永久', 3, '永久成长');
+  hit('全体友方', 4, '全队光环');
+  hit('随机3名友方', 4, '群体增益');
+  hit('随机2名友方', 3, '群体增益');
+  hit('所有友方', 4, '全队光环');
+  hit('虎符', 3.5, '经济');
+  hit('获得1张', 2.5, '找牌');
+  hit('挑选', 2.5, '找牌');
+  hit('志继', 3, '志继');
+  hit('当先', 2, '当先');
+  hit('遗计', 2, '遗计');
+  hit('阵亡', 1.5, '阵亡收益');
+  hit('破军', 2, '破军');
+  hit('御策', 2, '御策');
+  hit('咆哮', 2, '咆哮');
+  hit('复活', 2.5, '复活');
+  hit('重新上阵', 2.5, '复活');
+  hit('无法攻击', -3, '不能攻击');
+  hit('共享势力', 3, '万能');
+  hit('任意势力', 2, '万能');
+  p._score = s; p._tags = tags;
+  return s;
+}
+PIECES.forEach(cardScore);
+
+function piecesOf(m){ return PIECES.filter(p => p.minion === m); }
+
+function minionStats(m){
+  const list = piecesOf(m);
+  const byRank = {};
+  list.forEach(p => { (byRank[p.rank] = byRank[p.rank] || []).push(p); });
+  // 各星级相对全体平均的数值比
+  const rankAvg = {};
+  for (let r = 1; r <= 6; r++){
+    const all = PIECES.filter(p => p.rank === r);
+    rankAvg[r] = all.length ? all.reduce((a,b)=>a+b.atk+b.hp,0)/all.length : 1;
+  }
+  const w = {1:0.08,2:0.12,3:0.18,4:0.22,5:0.22,6:0.18};
+  let stat = 0, core = 0, synergy = 0, econ = 0;
+  for (let r = 1; r <= 6; r++){
+    const l = byRank[r] || [];
+    const avg = l.length ? l.reduce((a,b)=>a+b.atk+b.hp,0)/l.length : 0;
+    stat += (avg / (rankAvg[r] || 1)) * w[r];
+  }
+  const sorted = list.slice().sort((a,b)=>b._score-a._score);
+  core = sorted.slice(0,4).reduce((a,b)=>a+b._score,0) / 4 / 60;      // 归一化到 1 附近
+  // 协同/经济按"密度"算并封顶：牌多本身是优势，但不该把评分带飞
+  const synN = list.filter(p => /友方|全体|共享势力|任意势力/.test(p.skill||'')).length;
+  const ecoN = list.filter(p => /虎符|获得1张|挑选|招募/.test(p.skill||'')).length;
+  synergy = Math.min(1, synN / 6);
+  econ = Math.min(1, ecoN / 3);
+  const total = 10 * (stat*W.stat + core*W.core + synergy*W.synergy + econ*W.econ) + (PATCH[MN[m]]||0);
+  return { list, byRank, stat, core, synergy, econ, synN, ecoN, total };
+}
+
+function roleOf(p){
+  const t = p.skill || '';
+  if (p.atk <= 2 && p.hp >= p.atk * 2) return '坦克 / 前排';
+  if (/无法攻击/.test(t)) return '功能位（不攻击）';
+  if (/当先|开战|战斗开始时|破军/.test(t)) return '开战位（往前放）';
+  if (/遗计|阵亡|死亡/.test(t)) return '遗计位（靠前送）';
+  if (/虎符|获得1张|挑选|招募结束/.test(t)) return '经济位（保命优先）';
+  if (/咆哮|攻击力|造成.*伤害/.test(t)) return '输出位（吃属性）';
+  return '常规位';
+}
+
+/* ============================== 本局决策 ============================== */
+const S = { avail: new Set(MINIONS.map(m => m.id)) };
+
+function renderChips(){
+  const box = document.getElementById('minionChips');
+  box.innerHTML = '';
+  MINIONS.forEach(m => {
+    const b = document.createElement('span');
+    b.className = 'chip' + (S.avail.has(m.id) ? ' on' : ' ban');
+    b.textContent = m.name;
+    b.onclick = () => { S.avail.has(m.id) ? S.avail.delete(m.id) : S.avail.add(m.id); renderChips(); render(); };
+    box.appendChild(b);
+  });
+}
+function randomPick(n){
+  const ids = MINIONS.map(m=>m.id).sort(()=>Math.random()-0.5).slice(0, n);
+  S.avail = new Set(ids); renderChips(); render();
+}
+function selectAll(){ S.avail = new Set(MINIONS.map(m=>m.id)); renderChips(); render(); }
+
+function renderGeneralSelect(){
+  const sel = document.getElementById('generalSel');
+  sel.innerHTML = '<option value="">（未选择）</option>' + GENERALS.map(g =>
+    `<option value="${g.id}">${g.name}｜${g.skill}${g.active ? '（主动）' : '（被动）'}</option>`).join('');
+  sel.onchange = () => { showGeneral(); render(); };
+}
+function showGeneral(){
+  const g = GENERALS.find(x => x.id === +document.getElementById('generalSel').value);
+  document.getElementById('generalInfo').textContent = g
+    ? `${g.name}　体力 ${g.hp}　技能【${g.skill}】${g.skillDesc}`
+    : '';
+}
+
+function renderShopSelect(){
+  const sel = document.getElementById('shopLv');
+  sel.innerHTML = D.economy.shopLevels.map(l => `<option value="${l.level}">${l.level} 级（${l.columns} 格）</option>`).join('');
+  sel.value = '3';
+  sel.onchange = render;
+}
+
+function renderWeights(){
+  const box = document.getElementById('weights');
+  const labels = { stat:'数值', core:'核心质量', synergy:'协同', econ:'经济' };
+  box.innerHTML = Object.keys(W).map(k =>
+    `<label>${labels[k]} <input type="number" step="0.1" min="0" max="3" style="width:64px" data-w="${k}" value="${W[k]}"></label>`).join('');
+  box.querySelectorAll('input[data-w]').forEach(inp => inp.onchange = () => {
+    W[inp.dataset.w] = +inp.value; saveW(); render();
+  });
+  const pb = document.createElement('div');
+  pb.className = 'muted';
+  pb.style.marginTop = '6px';
+  pb.innerHTML = '版本调整：' + Object.keys(PATCH).map(k =>
+    `${k}<input type="number" step="1" min="-30" max="30" style="width:56px;margin:0 8px 0 2px" data-p="${k}" value="${PATCH[k]}">`).join('');
+  box.parentElement.appendChild(pb);
+  pb.querySelectorAll('input[data-p]').forEach(inp => inp.onchange = () => {
+    PATCH[inp.dataset.p] = +inp.value; savePatch(); render();
+  });
+}
+
+function renderRanking(){
+  const box = document.getElementById('ranking');
+  const avail = MINIONS.filter(m => S.avail.has(m.id));
+  const rows = avail.map(m => ({ m, s: minionStats(m.id) })).sort((a,b)=>b.s.total-a.s.total);
+  if (!rows.length){ box.innerHTML = '<div class="muted">先选至少一个本局可用阵营。</div>'; return; }
+  const max = rows[0].s.total || 1;
+  box.innerHTML = rows.map((r, i) => `
+    <div style="margin-bottom:10px">
+      <div class="row" style="justify-content:space-between">
+        <div><span class="tag m${r.m.id}">${r.m.name}</span>
+          <span class="muted">${r.s.list.length} 张牌｜数值 ${r.s.stat.toFixed(2)}｜核心质量 ${r.s.core.toFixed(2)}｜协同牌 ${r.s.synN} 张｜经济牌 ${r.s.ecoN} 张${r.s.byRank[1]?'':'｜<b style="color:#e2a15f">缺 1★ 过渡牌</b>'}</span>
+        </div>
+        <div class="score">${r.s.total.toFixed(1)} ${i===0?'★最优':''}</div>
+      </div>
+      <div class="bar"><i style="width:${(r.s.total/max*100).toFixed(0)}%"></i></div>
+    </div>`).join('');
+}
+
+function lineupFor(id){
+  const list = piecesOf(id).slice().sort((a,b)=>b._score-a._score);
+  // 7 个坑位：2×6星、2×5星、2×4星、1×低星（不够就用次优补）
+  const plan = [], used = new Set();
+  const take = (rank, n) => {
+    const l = list.filter(p => p.rank === rank && !used.has(p.id));
+    l.slice(0, n).forEach(p => { used.add(p.id); plan.push(p); });
+  };
+  take(6,2); take(5,2); take(4,2); take(3,1);
+  for (const p of list){
+    if (plan.length >= 7) break;
+    if (!used.has(p.id)) { used.add(p.id); plan.push(p); }
+  }
+  return plan.slice(0,7);
+}
+
+function adviceFor(m, st){
+  const plan = lineupFor(m.id);
+  const early = piecesOf(m.id).filter(p => p.rank <= 2).sort((a,b)=>b._score-a._score);
+  const econ = piecesOf(m.id).filter(p => /虎符|获得1张|挑选/.test(p.skill||''));
+  const engine = piecesOf(m.id).filter(p => /永久|全体友方|所有友方|志继/.test(p.skill||''));
+  return { plan, early, econ, engine };
+}
+
+function renderAdvice(){
+  const box = document.getElementById('advice');
+  const avail = MINIONS.filter(m => S.avail.has(m.id));
+  if (!avail.length){ box.innerHTML = '<div class="muted">先选阵营。</div>'; return; }
+  const ranked = avail.map(m => ({ m, s: minionStats(m.id) })).sort((a,b)=>b.s.total-a.s.total);
+  const round = +document.getElementById('roundNo').value || 1;
+  const lv = +document.getElementById('shopLv').value;
+  const coin = +document.getElementById('coinNo').value;
+  const lvRow = D.economy.shopLevels.find(l => l.level === lv);
+  const nextRow = D.economy.shopLevels.find(l => l.level === lv + 1);
+
+  box.innerHTML = ranked.slice(0, Math.min(3, ranked.length)).map((r, idx) => {
+    const a = adviceFor(r.m, r.s);
+    const lineup = a.plan.map((p, i) => {
+      const slotTip = roleOf(p);
+      return `<div class="slot"><b>${i+1}. ${p.name}</b>
+        <span class="r">${p.rank}★</span> ${p.atk}/${p.hp}
+        <div class="muted">${slotTip}</div></div>`;
+    }).join('');
+    return `
+    <div class="card" style="background:${idx===0?'#20242e':'var(--panel)'}">
+      <h3>${idx===0?'首选':'备选'+idx}：<span class="tag m${r.m.id}">${r.m.name}</span>
+        评分 ${r.s.total.toFixed(1)}${idx===0?'　（本局最强）':''}</h3>
+      <div class="muted" style="margin-bottom:6px">7 人成型阵容（按评分+星级曲线给的建议位，位置号=上阵顺序，越靠前越早出手）</div>
+      <div class="lineup">${lineup}</div>
+      <h3>低星过渡（前 2~5 回合）</h3>
+      <div class="muted">${a.early.slice(0,6).map(p=>`${p.name}(${p.rank}★ ${p.atk}/${p.hp})`).join('、') || '该势力没有 1~2 星牌'}</div>
+      <h3>关键组件</h3>
+      <div class="muted">经济牌：${a.econ.map(p=>p.name).join('、') || '无'}　｜　成长/光环牌：${a.engine.slice(0,8).map(p=>p.name).join('、') || '无'}</div>
+      <h3>技能速览</h3>
+      <div class="muted">${a.plan.map(p=>`<b>${p.name}</b>：${p.skill||'—'}`).join('<br>')}</div>
+    </div>`;
+  }).join('') + `
+  <div class="card">
+    <h2>运营节奏（当前：第 ${round} 回合 / 营帐 ${lv} 级 / ${coin} 虎符）</h2>
+    ${opsBlock(round, lv, coin, lvRow, nextRow, ranked[0])}
+    <div class="tip">
+      通用逻辑：<b>前期留虎符别乱刷</b>（前几回合牌池小、刷新价值低）→ 中期用虎符和等级优势抢 4~5 星核心 →
+      后期只做“关键牌三连+补强”。每次刷新 ${D.economy.refreshCost} 虎符、每张牌 ${D.economy.chessPrice} 虎符，
+      遣散只回 ${D.economy.sellPrice}，所以<b>买的过程中尽量只买最终要用的牌</b>。
+    </div>
+  </div>`;
+}
+
+function opsBlock(round, lv, coin, lvRow, nextRow, top){
+  const out = [];
+  if (round <= 4){
+    out.push('节奏1：<b>稳住别刷</b>。前 4 回合只买对子/低星打工牌，虎符优先留着升营帐。');
+    out.push('节奏2：确定本局主力阵营 —— 只留 1~2 个流派的对子，其他一律不买。');
+  } else if (round <= 9){
+    out.push('节奏1：<b>冲营帐等级</b>。这个阶段等级带来的牌池收益 > 刷牌，尽量在本阶段把营帐推到 4 级附近。');
+    out.push('节奏2：留 1~2 张低星打工牌过渡，核心牌只留对子，不要为了凑阵容把虎符花光。');
+  } else if (round <= 15){
+    out.push('节奏1：<b>找核心</b>。用 4~5 级牌池刷 4/5 星核心，凑出至少 1 个金色（三连）稳住战力。');
+    out.push('节奏2：观察对手势力，尽量避开 2~3 家都在抢的牌（同池的人多了，三连更难）。');
+  } else {
+    out.push('节奏1：<b>补强与容错</b>。把 5~6 星关键卡升金，装备优先给能吃属性的核心位。');
+    out.push('节奏2：血量健康就存虎符等关键牌；血量危险就果断刷新找即时战力，别留钱留到出局。');
+  }
+  if (lvRow && nextRow){
+    out.push(`升级参考：${lv}→${lv+1} 级标价 <b>${nextRow.upgradeCost}</b> 虎符（每回合会 -2，最低 0），
+      升上去后商店从 ${lvRow.columns} 格变 ${nextRow.columns} 格，高星概率变化见「运营/经济」页。`);
+  }
+  if (coin >= 30) out.push('你现在虎符较多：优先考虑升营帐或吃利息上限，别一次性刷空。');
+  if (coin <= 5 && lv < 5) out.push('虎符偏少：这几回合建议"买牌就停"，把基础收入攒起来再动。');
+  if (top) out.push(`本局优先级：<b>${top.m.name}</b> 主线，另外挑一个评分次高的阵营留对子，防止被卡牌卡死。`);
+  return out.map(t => `<div class="tip">${t}</div>`).join('');
+}
+
+function renderPlan(){ renderRanking(); renderAdvice(); }
+
+/* ============================== 图鉴 ============================== */
+const DX = { minions: new Set(MINIONS.map(m=>m.id)), ranks: new Set([1,2,3,4,5,6]), q: '' };
+function renderDexFilters(){
+  document.getElementById('dexRank').innerHTML = [1,2,3,4,5,6].map(r =>
+    `<span class="chip ${DX.ranks.has(r)?'on':'ban'}" data-r="${r}">${r}★</span>`).join(' ');
+  document.querySelectorAll('#dexRank .chip').forEach(c => c.onclick = () => {
+    const r = +c.dataset.r; DX.ranks.has(r) ? DX.ranks.delete(r) : DX.ranks.add(r); renderDexFilters(); renderDex();
+  });
+  const holder = document.getElementById('dexMinions');
+  holder.innerHTML = MINIONS.map(m => `<span class="chip ${DX.minions.has(m.id)?'on':'ban'}" data-m="${m.id}">${m.name}</span>`).join('');
+  holder.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+    const m = +c.dataset.m; DX.minions.has(m) ? DX.minions.delete(m) : DX.minions.add(m); renderDexFilters(); renderDex();
+  });
+}
+function renderDex(){
+  const sort = document.getElementById('dexSort').value;
+  let list = PIECES.filter(p => DX.minions.has(p.minion) && DX.ranks.has(p.rank));
+  if (DX.q) list = list.filter(p => (p.name + p.skill).includes(DX.q));
+  list = list.slice().sort((a,b) => {
+    if (sort === 'score') return b._score - a._score;
+    if (sort === 'stat') return (b.atk+b.hp) - (a.atk+a.hp);
+    if (sort === 'name') return a.name.localeCompare(b.name, 'zh');
+    return a.rank - b.rank || (b.atk+b.hp) - (a.atk+a.hp);
+  });
+  document.getElementById('dexCount').textContent = `共 ${list.length} 张（当前赛季商店池）`;
+  document.getElementById('dexTable').innerHTML = `
+    <thead><tr><th>名称</th><th>势力</th><th>星级</th><th>攻击</th><th>体力</th>
+    <th>金色</th><th>评分</th><th>定位</th><th>技能</th></tr></thead><tbody>` +
+    list.map(p => `<tr>
+      <td><b>${p.name}</b></td>
+      <td><span class="tag m${p.minion}">${MN[p.minion]||p.minion}</span></td>
+      <td class="rank">${p.rank}★</td>
+      <td class="num">${p.atk}</td>
+      <td class="num">${p.hp}</td>
+      <td class="num muted">${p.goldAtk!=null?p.goldAtk+'/'+p.goldHp:'—'}</td>
+      <td class="num score">${p._score.toFixed(1)}</td>
+      <td class="muted">${roleOf(p)}</td>
+      <td>${p.skill||''}${p.goldSkill?`<div class="muted">金色：${p.goldSkill}</div>`:''}</td>
+    </tr>`).join('') + '</tbody>';
+}
+
+/* ============================== 运营页 ============================== */
+function renderEcon(){
+  const st = D.economy.shopLevels;
+  document.getElementById('shopTable').innerHTML = `
+    <thead><tr><th>营帐</th><th>升级费用</th><th>格子</th><th>1★</th><th>2★</th><th>3★</th><th>4★</th><th>5★</th><th>6★</th><th>神</th></tr></thead>
+    <tbody>${st.map(l => `<tr>
+      <td class="rank">${l.level} 级</td><td class="num">${l.upgradeCost}</td><td class="num">${l.columns}</td>
+      ${l.chance.map((c,i)=>`<td class="num ${i>=4&&c>0?'score':''}">${c}</td>`).join('')}
+    </tr>`).join('')}</tbody>`;
+
+  const e = D.economy;
+  const rows = [
+    ['刷新一次', e.refreshCost + ' 虎符'], ['购买一张棋子', e.chessPrice + ' 虎符'],
+    ['遣散回收', e.sellPrice + ' 虎符'], ['每回合基础收入', e.baseIncome + ' 虎符（随回合增加）'],
+    ['利息', `每档 +${e.interestStep}，上限 ${e.maxProfit}`],
+    ['手牌上限', e.handLimit + ' 张'], ['上阵上限', e.boardSize + ' 位'],
+    ['装备发放回合', e.weaponRounds.map(w=>`第${w.round}回合 ${['','武器','防具','坐骑'][w.type]||''}`).join('、')],
+    ['阵亡结算上限', Object.entries(e.damageCap).map(([k,v])=>`剩${k}人时最多${v}点`).join('、')],
+  ];
+  document.getElementById('econKv').innerHTML = rows.map(([k,v]) =>
+    `<div class="card" style="margin:0"><div class="kv"><span>${k}</span><span>${v}</span></div></div>`).join('');
+
+  document.getElementById('rules').innerHTML = `
+    <div class="tip">主公选人 35 秒；每位玩家 7 个上阵位；战斗开始后从左到右依次交替随机攻击，直到一方场上没有存活棋子。</div>
+    <div class="tip">战败方主公掉血 = 胜方场上存活棋子的星级总和 + 胜方营帐等级；主公体力归零出局，最后一人吃鸡。</div>
+    <div class="tip">三连：手牌+场上共 3 张同名非金色棋子 → 合成金色，保留所有强化，并能从 3 张「营帐等级+1」的武将里挑 1 张。</div>
+    <div class="tip">招募阶段获得的属性是永久的，战斗阶段获得的属性战斗结束会消失 —— 判断一张成长卡值不值钱，先看它加的是哪一种。</div>
+    <div class="tip">开局时服务器随机下发「本局阵营」（配置字段 <code>chessMinionTypList</code>），其它阵营的棋子不会出现在商店里，所以选流派要跟着本局阵营走。</div>`;
+}
+
+/* ============================== 交互 ============================== */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('section').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
+  render();
+});
+function gotoTab(name){
+  const btn = document.querySelector(`nav button[data-tab="${name}"]`);
+  if (btn) btn.click();
+}
+window.addEventListener('hashchange', () => gotoTab(location.hash.slice(1)));
+['roundNo','coinNo','hpNo'].forEach(id => document.getElementById(id).onchange = render);
+document.getElementById('dexSearch').oninput = e => { DX.q = e.target.value.trim(); renderDex(); };
+document.getElementById('dexSort').onchange = renderDex;
+
+function render(){ renderPlan(); renderDex(); renderEcon(); }
+
+if (D){
+  // 支持用 ?avail=1,2,3,4 直接锁定本局阵营（方便存书签）
+  const q = new URLSearchParams(location.search).get('avail');
+  if (q){
+    const ids = q.split(',').map(x => parseInt(x, 10)).filter(x => MINIONS.some(m => m.id === x));
+    if (ids.length) S.avail = new Set(ids);
+  }
+  renderChips(); renderGeneralSelect(); showGeneral(); renderShopSelect(); renderWeights();
+  renderDexFilters(); render();
+  if (location.hash) gotoTab(location.hash.slice(1));
+}
+</script>
+</body>
+</html>

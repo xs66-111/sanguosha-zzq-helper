@@ -1,0 +1,16 @@
+# 下载缓存（可重新抓取，体积大）
+tools/.cache/
+tools/__pycache__/
+__pycache__/
+*.pyc
+
+# 你自己的对局记录（含昵称等个人信息，别提交）
+records/matches.json
+记录报告.md
+
+# 实机截图（含个人昵称/ID）
+浮窗实机*.png
+
+# 编辑器
+.vscode/
+.idea/
