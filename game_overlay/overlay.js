@@ -5,7 +5,7 @@
  */
 (function () {
   'use strict';
-  const VERSION = '5.1.0';
+  const VERSION = '6.0.1';
   if (window.__zzqOverlayLoaded && window.__zzqOverlayVersion === VERSION) return;
   window.__zzqOverlayLoaded = true;
   window.__zzqOverlayVersion = VERSION;
@@ -16,7 +16,7 @@
   }
 
   const D = window.TC_DATA || null;
-  const LINEUPS = window.TC_LINEUPS || [];   // 官方阵容库（带真实胜率/使用人数/运营思路）
+  const ENG = window.TC_ENGINE || null;      // 阵容引擎（跨阵营组阵容 + 克制关系）
   const STATS = window.TC_STATS || null;     // 自己打出来的统计（本地对局记录汇总）
   const SCAN_MS = 700;
   const TAG = '[自走棋助手]';
@@ -744,21 +744,33 @@
     out.others = others;
     if (others.length) { out.threat = others[0]; out.weakest = others[others.length - 1]; }
 
-    // —— 官方阵容库：按"本局能不能做 + 主公是否一致 + 胜率/吃鸡率/使用人数 - 抢牌压力"排序
-    if (LINEUPS.length) {
-      const myGen = st.generalID;
-      out.lineups = LINEUPS.map(L => {
-        const usable = L.countries.length ? L.countries.every(c => !avail.length || avail.indexOf(c) >= 0) : true;
-        const hitMain = L.countries.indexOf(out.main) >= 0;
-        const sameGeneral = myGen && L.generals.indexOf(myGen) >= 0;
-        const pressure = L.countries.reduce((a, c) => a + contestedMinion(c), 0);
-        let score = L.winRate * 1.0 + L.chickenRate * 1.5 + Math.log10((L.users || 0) + 10) * 6;
-        if (usable) score += 12; else score -= 30;
-        if (sameGeneral) score += 8;
-        if (hitMain) score += 6;
-        score -= pressure * 3;
-        return { L, usable, sameGeneral, hitMain, pressure, score };
-      }).sort((a, b) => b.score - a.score).slice(0, 4);
+    // —— 我手里+场上的牌（给引擎算"已有多少张 / 能不能三连"）
+    const heldMap = {};
+    st.hand.concat(st.linePieces).forEach(c => {
+      if (c && c.name && c.name !== '（空位）' && c.rank) heldMap[c.name] = (heldMap[c.name] || 0) + 1;
+    });
+
+    // —— 阵容引擎：给 2~3 套完整阵容（跨阵营插件 + 前期/中期/核心/收尾 + 克制关系）
+    if (ENG && D) {
+      out.lineups = ENG.buildLineups({
+        pieces: D.pieces,
+        minions: avail,
+        opponents: out.oppMinions,
+        owned: heldMap,
+        rankPool: (D.economy && D.economy.rankPool) || null,
+        stats: STATS
+      });
+      out.counters = [];
+      for (let i = 0; i < out.lineups.length; i++) {
+        for (let j = i + 1; j < out.lineups.length; j++) {
+          out.counters.push({
+            a: out.lineups[i].name, b: out.lineups[j].name,
+            c: ENG.counterOf(out.lineups[i].id, out.lineups[j].id)
+          });
+        }
+      }
+      out.generalPick = {};
+      out.lineups.forEach(l => { out.generalPick[l.id] = ENG.recommendGenerals(l, D.generals || []); });
     }
 
     // —— 牌池：同星级棋子在公共池里的份数，用来判断三连难度
@@ -770,10 +782,6 @@
       .map(p => ({ name: p.name, have: p.n, rank: rankOfHeld[p.name], total: pool[String(rankOfHeld[p.name])] || 0 }));
 
     // —— 本局牌库：每个星级每张牌多少份 + 你持有 + 本局商店见过几次
-    const heldMap = {};
-    st.hand.concat(st.linePieces).forEach(c => {
-      if (c && c.name && c.name !== '（空位）' && c.rank) heldMap[c.name] = (heldMap[c.name] || 0) + 1;
-    });
     const libMinions = libAll ? avail : out.mains;
     out.lib = {
       all: libAll,
@@ -791,33 +799,6 @@
           }))
       }))
     };
-
-    // —— 阵容：按原理生成（核心依据 / 星级曲线 / 经济 / 过渡），不依赖官方阵容库
-    const ci = out.lib.curve;
-    out.plans = out.ranked.slice(0, 3).map(r => {
-      const list = (D ? D.pieces : []).filter(p => p.minion === r.id);
-      const byRank = {};
-      list.forEach(p => { (byRank[p.rank] = byRank[p.rank] || []).push(p); });
-      Object.keys(byRank).forEach(k => byRank[k].sort((a, b) => cardScore(b) - cardScore(a)));
-      const coreScore = (p) => cardScore(p) + p.rank * 3;
-      const plan = [];
-      [[6, 2], [5, 2], [4, 2], [3, 1], [2, 1], [1, 1]].forEach(([rk, n]) => {
-        (byRank[rk] || []).slice(0, n).forEach(p => { if (plan.length < 7 && plan.indexOf(p) < 0) plan.push(p); });
-      });
-      const rankedCards = list.slice().sort((a, b) => coreScore(b) - coreScore(a));
-      for (const p of rankedCards) { if (plan.length >= 7) break; if (plan.indexOf(p) < 0) plan.push(p); }
-      const cores = rankedCards.filter(p => p.rank >= 4).slice(0, 4);
-      const eco = list.filter(p => /虎符|获得1张|挑选|遣散/.test(p.skill || ''));
-      const grow = list.filter(p => /永久|全体友方|所有友方|共享势力|光环/.test(p.skill || ''));
-      const early = list.filter(p => p.rank <= 2).sort((a, b) => cardScore(b) - cardScore(a)).slice(0, 3);
-      return {
-        id: r.id, name: r.name, score: r.score,
-        adjScore: r.adjScore, history: r.history,
-        pressure: out.oppMinions[r.id] || 0,
-        plan, cores, eco, grow, early,
-        curveNote: [3, 4, 5, 6].map(x => `${x}★ ${ci[x].count}张×${ci[x].copies}份`).join('、')
-      };
-    });
 
     if (st.select3 && st.select3.length) {
       const scored = st.select3.map(c => {
@@ -938,59 +919,46 @@
       (a.pool && a.pool.length ? `<div class="zzq-op">牌池：${a.pool.map(x => `${esc(x.name)} ${x.rank}★ 池中${x.total}张(你${x.have})`).join('、')}</div>` : '')) : '';
 
     // —— 阵容库（官方数据）
-    const luRow = (arr, label) => {
-      if (!arr || !arr.length) return '';
-      const parts = arr.map(x => {
-        const p = pieceInfoLoose(x.id);
-        const nm = p ? p.name : ('#' + x.id);
-        const rk = p && p.rank ? p.rank + '★' : '';
-        return `${x.core ? '<b style="color:#ffd98a">' : ''}${esc(nm)}${rk ? '<small style="color:#6f7688">' + rk + '</small>' : ''}${x.core ? '</b>' : ''}`;
-      });
-      return `<div style="margin:1px 0"><span class="zzq-slot">${label}</span>${parts.join(' · ')}</div>`;
-    };
-    let luHtml = '';
+    // —— 阵容推荐（引擎出的 2~3 套，含跨阵营插件 / 主公 / 打法）
+    let planHtml = '';
     if (a.lineups && a.lineups.length) {
-      const items = a.lineups.map(({ L, usable, sameGeneral, pressure }) => {
-        const genNames = L.generals.map(g => (generalById.get(g) || {}).name || g).join('/');
-        const countryNames = L.countries.map(c => minionName[c] || c).join('/');
-        const status = !usable ? '<span style="color:#e2604f">本局没这个势力</span>'
-          : (sameGeneral ? '<span style="color:#9ce0b6">✔ 和你主公一致</span>' : '');
-        const press = pressure >= 3 ? `<span style="color:#e8cf9c">抢牌压力 ${pressure} 家</span>` : '';
-        const notes = L.notes || {};
-        const inner = `<div style="color:#9aa2b8">主公 ${esc(genNames)}｜势力 ${esc(countryNames)}　${status} ${press}</div>` +
-          luRow(L.early, '前期') + luRow(L.middle, '中期') + luRow(L.last, '后期') +
-          `<div class="zzq-op">主公思路：${esc(notes.general || '—')}</div>` +
-          `<div class="zzq-op">前期：${esc(notes.front || '—')}</div>` +
-          `<div class="zzq-op">中期：${esc(notes.middle || '—')}</div>` +
-          `<div class="zzq-op">后期：${esc(notes.last || '—')}</div>` +
-          `<div class="zzq-op">装备：${esc(notes.equip || '—')}</div>`;
-        return sec('lu_' + L.id,
-          `${esc(L.name)}　<span style="color:#e8c46a">胜率${L.winRate}% 吃鸡${L.chickenRate}% 使用${L.users}</span>`,
+      const items = a.lineups.map((L, idx) => {
+        const board = L.pieces.map(p =>
+          `<span class="tag m${p.minion}">${esc(p.name)}</span><small style="color:#6f7688">${p.rank}★${p.owned ? ' ·你' + p.owned : ''}</small>` +
+          (p.key ? '<span style="color:#ffd98a">●</span>' : '')
+        ).join(' ');
+        const plugs = L.plugs.length
+          ? `<div class="zzq-op">插件：${L.plugs.map(x => `<b>${esc(x.name)}</b>（${esc(x.kind)}：${esc(x.desc)}${x.replaced ? '，替换掉 ' + esc(x.replaced) : ''}）`).join('；')}</div>`
+          : '';
+        const gens = (a.generalPick && a.generalPick[L.id] || []);
+        const genLine = gens.length
+          ? `<div class="zzq-op">主公推荐：</div>` +
+            gens.map(g => `<div style="margin:0 0 2px 10px"><b>${esc(g.name)}</b>·${esc(g.skill)}：<span style="color:#6f7688">${esc((g.skillDesc || '').slice(0, 22))}…</span></div>`).join('')
+          : '';
+        const inner = `<div style="margin:2px 0">7 人成型：${board}</div>` +
+          `<div style="color:#9aa2b8;margin:2px 0">前期过渡：${L.early.map(p => esc(p.name) + p.rank + '★').join('、') || '（该势力没有低星牌，前期靠通用打工牌）'}</div>` +
+          plugs + genLine +
+          `<div class="zzq-op">为什么强：${esc(L.win)}</div>` +
+          `<div class="zzq-op">节奏：${esc(L.playbook)}</div>` +
+          `<div class="zzq-op" style="color:#e8cf9c">弱点：${esc(L.risk)}</div>`;
+        return sec('plan_' + L.id,
+          `${idx === 0 ? '①' : (idx === 1 ? '②' : '③')} <span class="tag m${L.mainMinion}">${esc(L.name)}</span> <span style="color:#e8c46a;white-space:nowrap">${L.score}分</span><br>` +
+          `<small style="color:#9aa2b8">${esc(L.type)}｜${esc(minionName[L.mainMinion] || L.mainMinion)}系｜已有 ${L.haveRatio}%${L.pressure ? '｜抢牌 ' + L.pressure + ' 家' : ''}${L.champHits ? '｜吃鸡牌 ' + L.champHits : ''}</small>`,
           inner);
       }).join('');
-      luHtml = sec('lu', `官方阵容库（仅参考，不参与上面的推荐）`,
-        `<div class="zzq-op">共 ${LINEUPS.length} 套，官方会不定时换；下面推荐以玩家实战原理为准，这里只当备查。</div>` + items);
+      planHtml = sec('plans', `阵容推荐（本局 ${a.lineups.length} 套，含跨阵营插件）`, items);
     }
 
-    // —— 阵容推荐（原理驱动）
-    const fill = (p) => `${esc(p.name)}<small style="color:#6f7688">${p.rank}★ ${p.atk}/${p.hp}</small>`;
-    let planHtml = '';
-    if (a.plans && a.plans.length) {
-      const items = a.plans.map((P, idx) => {
-        const coreSet = new Set(P.cores.map(c => c.name));
-        const board = P.plan.map(p => (coreSet.has(p.name) ? '<b style="color:#ffd98a">' : '') + esc(p.name) + '<small style="color:#6f7688">' + p.rank + '★</small>' + (coreSet.has(p.name) ? '</b>' : '')).join(' · ');
-        const inner = `<div style="margin:2px 0">7 人成型：${board}</div>` +
-          `<div class="zzq-op">核心依据：${P.cores.map(c => `${esc(c.name)}（${esc((c.skill || '').slice(0, 26))}…）`).join('；') || '无明显核心，按数值堆'}</div>` +
-          `<div class="zzq-op">曲线/三连：${esc(P.curveNote)}　—— 星级越高份数越少，6★ 别指望三连</div>` +
-          `<div class="zzq-op">经济牌：${P.eco.map(p => esc(p.name)).join('、') || '无（靠通用利息）'}</div>` +
-          `<div class="zzq-op">成长/光环：${P.grow.slice(0, 5).map(p => esc(p.name)).join('、') || '无'}</div>` +
-          `<div class="zzq-op">前期过渡：${P.early.map(p => esc(p.name) + p.rank + '★').join('、') || '该势力没有低星牌'}</div>` +
-          `<div class="zzq-op">节奏：1~4 回合只留对子别刷 → 5~9 冲营帐 → 10~15 找 ${P.cores[0] ? esc(P.cores[0].name) : '核心'} 这类核心 → 16+ 补金卡、调站位</div>`;
-        return sec('plan_' + P.id,
-          `${idx === 0 ? '首选' : '备选'} <span class="tag m${P.id}">${esc(P.name)}</span>　<span style="color:#e8c46a">强度 ${P.score.toFixed(1)}</span>${P.pressure ? `　<span style="color:#e8cf9c">抢牌 ${P.pressure} 家</span>` : ''}${P.history ? `　<span style="color:#9ce0b6">你打过${P.history.games}局·前四${P.history.top4}%</span>` : ''}`,
-          inner);
-      }).join('');
-      planHtml = sec('plans', '阵容推荐（按实战原理，不照搬官方）', items);
+    // —— 阵容克制
+    let counterHtml = '';
+    if (a.counters && a.counters.length) {
+      counterHtml = sec('cnt', '阵容之间的克制关系',
+        `<div class="zzq-op">上面的推荐阵容之间互打（本局八家都在抢同一池子，这个决定你最后选谁）</div>` +
+        a.counters.map(x => {
+          const t = x.c.result > 0 ? '<span style="color:#9ce0b6">优</span>' : (x.c.result < 0 ? '<span style="color:#e2604f">劣</span>' : '<span style="color:#e8cf9c">五五</span>');
+          return `<div class="zzq-row"><span>${esc(x.a)} vs ${esc(x.b)}</span><span>${t}</span></div>
+            <div style="color:#6f7688;font-size:11px;margin:-2px 0 4px 0">${esc(x.c.why || '')}</div>`;
+        }).join(''));
     }
 
     // —— 牌库
@@ -1055,7 +1023,7 @@
       <div class="zzq-kv"><span>虎符</span><b>${st.coin}</b></div>
       <div class="zzq-kv"><span>主公</span><b>${gen ? esc(gen.name) + '｜' + esc(gen.skill) : '—'}</b></div>
       <div class="zzq-kv"><span>体力</span><b>${st.hp || '?'}${st.hpLimit ? '/' + st.hpLimit : ''}</b></div>
-      ${generalHtml}${selectHtml}${planHtml}${libHtml}${statsHtml}
+      ${generalHtml}${selectHtml}${planHtml}${counterHtml}${libHtml}${statsHtml}
       <div class="zzq-sec">商店（按当前局面）</div>
       ${a.buyFirst ? `<div class="zzq-op zzq-hot">优先买：${a.buyFirst.map(esc).join(' > ')}</div>` : ''}
       ${cards}
@@ -1064,7 +1032,6 @@
       <div class="zzq-chips">${pairs}</div>
       <div class="zzq-sec">现在该干嘛</div>
       ${ops}
-      ${luHtml}
       <div class="zzq-foot">只读助手 v${VERSION} · 拖动标题栏 / Alt+H 隐藏 · 数据 ${D ? D.seasonName : '未加载'}</div>`;
   }
 

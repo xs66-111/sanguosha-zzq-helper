@@ -18,7 +18,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const DATA_FILE = path.join(ROOT, 'data', 'tavernchess.js');
-const LINEUPS_FILE = path.join(ROOT, 'data', 'lineups.js');
+const ENGINE_FILE = path.join(HERE, 'engine.js');
 const STATS_FILE = path.join(ROOT, 'data', 'stats.js');
 const OVERLAY_FILE = path.join(HERE, 'overlay.js');
 const RECORDS_FILE = path.join(ROOT, 'records', 'matches.json');
@@ -75,8 +75,8 @@ const PAYLOAD = `(function(){try{
   ${readText(DATA_FILE)}
 }catch(e){console.warn('[自走棋助手] 数据注入失败',e);}
 try{
-  ${fs.existsSync(LINEUPS_FILE) ? readText(LINEUPS_FILE) : ''}
-}catch(e){console.warn('[自走棋助手] 阵容库注入失败',e);}
+  ${readText(ENGINE_FILE)}
+}catch(e){console.warn('[自走棋助手] 阵容引擎注入失败',e);}
 try{
   ${fs.existsSync(STATS_FILE) ? readText(STATS_FILE) : ''}
 }catch(e){console.warn('[自走棋助手] 统计注入失败',e);}

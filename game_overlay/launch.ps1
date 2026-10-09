@@ -16,7 +16,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $Root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $DataFile = Join-Path $Root 'data\tavernchess.js'
-$LineupsFile = Join-Path $Root 'data\lineups.js'
+$EngineFile = Join-Path $Root 'game_overlay\engine.js'
 $StatsFile = Join-Path $Root 'data\stats.js'
 $OverlayFile = Join-Path $Root 'game_overlay\overlay.js'
 $RecordsFile = Join-Path $Root 'records\matches.json'
@@ -109,7 +109,7 @@ if (Test-Port) {
 
 # ---- 读取注入内容 ----
 $dataJs = Get-Content -LiteralPath $DataFile -Raw -Encoding UTF8
-$lineupsJs = if (Test-Path -LiteralPath $LineupsFile) { Get-Content -LiteralPath $LineupsFile -Raw -Encoding UTF8 } else { '' }
+$engineJs = if (Test-Path -LiteralPath $EngineFile) { Get-Content -LiteralPath $EngineFile -Raw -Encoding UTF8 } else { '' }
 $statsJs = if (Test-Path -LiteralPath $StatsFile) { Get-Content -LiteralPath $StatsFile -Raw -Encoding UTF8 } else { '' }
 $overlayJs = Get-Content -LiteralPath $OverlayFile -Raw -Encoding UTF8
 $payload = @"
@@ -117,8 +117,8 @@ $payload = @"
 $dataJs
 }catch(e){console.warn('[自走棋助手] 数据注入失败',e);}
 try{
-$lineupsJs
-}catch(e){console.warn('[自走棋助手] 阵容库注入失败',e);}
+$engineJs
+}catch(e){console.warn('[自走棋助手] 阵容引擎注入失败',e);}
 try{
 $statsJs
 }catch(e){console.warn('[自走棋助手] 统计注入失败',e);}

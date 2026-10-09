@@ -14,14 +14,13 @@ const i = args.indexOf('--port');
 const PORT = i >= 0 && args[i + 1] ? Number(args[i + 1]) : 9222;
 
 const dataJs = fs.readFileSync(path.join(ROOT, 'data', 'tavernchess.js'), 'utf8');
-const lineupsPath = path.join(ROOT, 'data', 'lineups.js');
-const lineupsJs = fs.existsSync(lineupsPath) ? fs.readFileSync(lineupsPath, 'utf8') : '';
+const engineJs = fs.readFileSync(path.join(HERE, 'engine.js'), 'utf8');
 const statsPath = path.join(ROOT, 'data', 'stats.js');
 const statsJs = fs.existsSync(statsPath) ? fs.readFileSync(statsPath, 'utf8') : '';
 const overlayJs = fs.readFileSync(path.join(HERE, 'overlay.js'), 'utf8');
 const RUN = `(function(){
 try{${dataJs}}catch(e){console.warn('[自走棋助手] 数据注入失败',e);}
-try{${lineupsJs}}catch(e){console.warn('[自走棋助手] 阵容库注入失败',e);}
+try{${engineJs}}catch(e){console.warn('[自走棋助手] 阵容引擎注入失败',e);}
 try{${statsJs}}catch(e){console.warn('[自走棋助手] 统计注入失败',e);}
 try{${overlayJs}}catch(e){console.warn('[自走棋助手] 浮窗注入失败',e);}
 })();`;
