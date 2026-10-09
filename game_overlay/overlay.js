@@ -5,7 +5,7 @@
  */
 (function () {
   'use strict';
-  const VERSION = '6.0.1';
+  const VERSION = '6.0.2';
   if (window.__zzqOverlayLoaded && window.__zzqOverlayVersion === VERSION) return;
   window.__zzqOverlayLoaded = true;
   window.__zzqOverlayVersion = VERSION;
@@ -198,6 +198,16 @@
 
   /* ============================ 读状态 ============================ */
   let sceneCache = null, sceneAt = 0;
+  // 游戏自己的 getter（numChildren / _children）在场景销毁后会抛异常，统一包一层
+  function safeKids(n) {
+    try {
+      const k = n._children || n.children || n.childList;
+      return Array.isArray(k) ? k : [];
+    } catch (e) { return []; }
+  }
+  function safeNumChildren(n) {
+    try { const c = Number(n.numChildren || 0); return c > 0 ? c : 0; } catch (e) { return 0; }
+  }
   function isUsableScene(s) {
     if (!s) return false;
     try {
@@ -228,9 +238,9 @@
         }
       } catch (e) { }
       if (score > bestScore) { bestScore = score; best = n; }
-      const kids = n._children || n.children || n.childList;
-      if (Array.isArray(kids)) for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
-      const c = Number(n.numChildren || 0);
+      const kids = safeKids(n);
+      for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+      const c = safeNumChildren(n);
       if (c > 0 && typeof n.getChildAt === 'function') {
         for (let i = 0; i < c; i++) { try { stack.push(n.getChildAt(i)); } catch (e) { } }
       }
@@ -252,9 +262,9 @@
       if (!n || seen.has(n)) continue;
       seen.add(n);
       try { if (n.ReqShopRefreshChess || n.ShopGoods || n.shopGoods || n.playerList || (n.selfInfo && n.CoinNum !== undefined)) return n; } catch (e) { }
-      const kids = n._children || n.children || n.childList;
-      if (Array.isArray(kids)) kids.forEach(k => stack.push(k));
-      const c = Number(n.numChildren || 0);
+      const kids = safeKids(n);
+      kids.forEach(k => stack.push(k));
+      const c = safeNumChildren(n);
       if (c > 0 && typeof n.getChildAt === 'function') for (let i = 0; i < c; i++) { try { stack.push(n.getChildAt(i)); } catch (e) { } }
     }
     return null;
@@ -354,8 +364,7 @@
               } catch (e) { }
             }
           }
-          const kids = n._children || n.children || n.childList;
-          if (Array.isArray(kids)) kids.forEach(k => stack.push(k));
+          safeKids(n).forEach(k => stack.push(k));
         }
       } catch (e) { }
     }
@@ -524,9 +533,8 @@
               out.push({ name: bo.name || '', generalID: bo.generalID || 0, hp: bo.hp || 0, level: bo.level || 0, pieces });
             }
           }
-          const kids = n._children || n.children;
-          if (Array.isArray(kids)) kids.forEach(k => stack.push(k));
-          const c = Number(n.numChildren || 0);
+          safeKids(n).forEach(k => stack.push(k));
+          const c = safeNumChildren(n);
           if (c > 0 && typeof n.getChildAt === 'function') for (let i = 0; i < c; i++) { try { stack.push(n.getChildAt(i)); } catch (e) { } }
         }
       } catch (e) { }
