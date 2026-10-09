@@ -11,6 +11,9 @@ records/matches.json
 # 实机截图（含个人昵称/ID）
 浮窗实机*.png
 
+# 自动监视器日志
+logs/
+
 # 编辑器
 .vscode/
 .idea/
