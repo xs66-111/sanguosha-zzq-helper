@@ -5,7 +5,7 @@
  */
 (function () {
   'use strict';
-  const VERSION = '6.0.2';
+  const VERSION = '6.1.2';
   if (window.__zzqOverlayLoaded && window.__zzqOverlayVersion === VERSION) return;
   window.__zzqOverlayLoaded = true;
   window.__zzqOverlayVersion = VERSION;
@@ -419,6 +419,7 @@
       const prev = lastRound.find(q => q && p && String(q.userID) === String(p.userID)) || {};
       return {
         seat: i + 1,
+        uid: String((p && p.userID) || ''),
         name: (p && (p.nickname || p.nickName)) || prev.nickname || '',
         hp: p ? Number(p.hp || 0) : 0,
         level: Number((p && p.shopLevel) || prev.shopLevel || 0),
@@ -443,7 +444,11 @@
       generalID: Number(mgr.GeneralID || (self && self.generalID) || 0),
       // 还没选主公：自己和 selfInfo 上都还没有 generalID
       choosingGeneral: !Number(mgr.selfGeneralID || 0) && !Number((self && self.generalID) || 0),
+      // 本轮对手：selfInfo.thisRoundBatterUserID 从招募阶段起就指向本回合要打的人，整回合不变（实测 2026-10-17）
+      nextOpponentUid: String((self && (self.thisRoundBatterUserID || self.ThisRoundBatterUserID)) || ''),
+      tableID: Number((mgr.teamInfo && mgr.teamInfo.tableID) || 0),
       battleOpponent: (mgr.battlePlayerInfo && (mgr.battlePlayerInfo.nickname || mgr.battlePlayerInfo.userID)) ? {
+        uid: String(mgr.battlePlayerInfo.userID || ''),
         name: mgr.battlePlayerInfo.nickname || '',
         hp: Number(mgr.battlePlayerInfo.hp || 0),
         level: Number(mgr.battlePlayerInfo.shopLevel || 0),
@@ -558,10 +563,83 @@
     return alive >= 1 ? Math.min(8, alive + 1) : null;
   }
 
+  /* ============================ 对手阵容记忆 ============================
+   * 客户端只在你和某人交手时下发他的场上武将（enemyPlayerInfo.Chess，phase 9 出现，phase 10 只剩幸存者，下回合清空）。
+   * 把它按对手 uid 记下来，招募阶段就能看到「下轮对手上次摆了什么」，和炉石酒馆战棋助手一样。
+   * 归属用 selfInfo.thisRoundBatterUserID（本回合对手），不用昵称（经常为空）。
+   */
+  const OPP_KEY = 'zzq_oppmem_v1';
+  let oppMem = {};            // tableID -> { uid -> { name, generalID, history: [{round, hp, level, pieces}] } }
+  try { oppMem = JSON.parse(localStorage.getItem(OPP_KEY) || '{}') || {}; } catch (e) { oppMem = {}; }
+  window.__zzqOppMem = oppMem;
+
+  function saveOppMem() {
+    try {
+      const observedAt = key => Object.values(oppMem[key]).reduce((latest, rec) =>
+        Math.max(latest, ...(rec.history || []).map(h => Number(h.observedAt) || 0)), 0);
+      const keys = Object.keys(oppMem).sort((a, b) => observedAt(a) - observedAt(b));
+      while (keys.length > 8) delete oppMem[keys.shift()];     // 只留最近 8 桌
+      localStorage.setItem(OPP_KEY, JSON.stringify(oppMem));
+    } catch (e) { }
+  }
+
+  function oppTable(st) {
+    const k = String(st.tableID || (cur && cur.id) || 'unknown');
+    return oppMem[k] || (oppMem[k] = {});
+  }
+
+  function observeOpponent(st, mgr) {
+    try {
+      const ep = mgr.enemyPlayerInfo;
+      if (!ep || !ep.Chess) return;
+      const pieces = Object.keys(ep.Chess).map(k => ep.Chess[k]).filter(Boolean).map(c => ({
+        chessID: Number(c.chessID || 0), pos: Number(c.pos || 0),
+        atk: Number(c.totalAttack || c.attack || 0), hp: Number(c.totalHp || c.hp || 0)
+      })).filter(p => p.chessID).sort((a, b) => a.pos - b.pos);
+      if (!pieces.length) return;
+      const uid = String(ep.userID || st.nextOpponentUid || (st.battleOpponent && st.battleOpponent.uid) || '');
+      if (!uid) return;
+      const tbl = oppTable(st);
+      const pl = st.players.find(p => p.uid === uid) || {};
+      const rec = tbl[uid] || (tbl[uid] = { uid, name: '', generalID: 0, history: [] });
+      if (pl.name) rec.name = pl.name;
+      if (pl.generalID) rec.generalID = pl.generalID;
+      const round = Number(st.round || 0);
+      const last = rec.history[rec.history.length - 1];
+      if (last && last.round === round) {
+        // 同回合反复读到：战斗开始时是完整阵容，结束时只剩幸存者，只在棋子更多时覆盖
+        if (pieces.length > last.pieces.length) {
+          last.pieces = pieces;
+          last.observedAt = Date.now();
+        }
+      } else {
+        rec.history.push({ round, observedAt: Date.now(), hp: Number(ep.hp || pl.hp || 0), level: Number(ep.shopLevel || pl.level || 0), pieces });
+        if (rec.history.length > 30) rec.history.shift();
+      }
+      saveOppMem();
+    } catch (e) { window.__zzqOppError = String((e && e.stack) || e); }
+  }
+
+  function lastSeen(st, uid) {
+    const tbl = oppMem[String(st.tableID || (cur && cur.id) || 'unknown')];
+    const rec = tbl && tbl[String(uid)];
+    if (!rec || !rec.history.length) return null;
+    return rec.history[rec.history.length - 1];
+  }
+
+  function pieceTag(p) {
+    const info = pieceInfoLoose(p.chessID) || chessInfo(p.chessID) || {};
+    const gold = info.golden ? '★' : '';
+    const nm = info.name || p.chessID;
+    const stat = (p.atk || p.hp) ? `<small style="color:#6f7688">${p.atk}/${p.hp}</small>` : '';
+    return `<span class="tag m${info.minion || 0}">${gold}${esc(nm)}</span>${stat}`;
+  }
+
   function recordTick(st, scene) {
     try {
       const mgr = findManager(scene);
       if (!mgr) return;
+      observeOpponent(st, mgr);
       const self = st.players.find(p => p.isSelf) || {};
       if (!cur) {
         cur = {
@@ -915,15 +993,28 @@
       (a.position.diff.length ? a.position.diff.map(d => `<div class="zzq-op zzq-hot">${esc(d)}</div>`).join('')
         : '<div class="zzq-op">现在的站位和这套逻辑一致</div>')) : '';
 
+    const nextUid = st.nextOpponentUid || (st.battleOpponent && st.battleOpponent.uid) || '';
+    const nextSeen = nextUid ? lastSeen(st, nextUid) : null;
+    const nextOpponent = st.players.find(p => nextUid && p.uid === nextUid) || st.battleOpponent;
+    const nextHtml = nextOpponent
+      ? `<div class="zzq-op zzq-hot">本轮对手：${esc(nextOpponent.name || '未知')}（${nextOpponent.hp} 血 / ${nextOpponent.level} 级${generalById.get(nextOpponent.generalID) ? ' · ' + esc(generalById.get(nextOpponent.generalID).name) : ''}）</div>` +
+        (nextSeen
+          ? `<div class="zzq-op">他上次（第 ${nextSeen.round} 回合）的阵容：${nextSeen.pieces.map(pieceTag).join(' ')}</div>`
+          : `<div class="zzq-op">还没和他交过手，阵容未知</div>`)
+      : '';
     const oppHtml = (a.others && a.others.length) ? sec('opp', `对手（存活 ${a.others.length} 家）`,
-      (st.battleOpponent ? `<div class="zzq-op zzq-hot">本轮对手：${esc(st.battleOpponent.name || '未知')}（${st.battleOpponent.hp} 血 / ${st.battleOpponent.level} 级${generalById.get(st.battleOpponent.generalID) ? ' · ' + esc(generalById.get(st.battleOpponent.generalID).name) : ''}）</div>` : '') +
+      nextHtml +
       a.others.map(p => {
         const gen = generalById.get(p.generalID);
         const tag = (a.weakest && p.seat === a.weakest.seat) ? '⚠ 可送走' : ((a.threat && p.seat === a.threat.seat) ? '🔥 威胁' : '');
+        const seen = p.uid ? lastSeen(st, p.uid) : null;
+        const seenHtml = seen
+          ? `<div class="zzq-op" style="margin-left:10px">第 ${seen.round} 回合见过：${seen.pieces.map(pieceTag).join(' ')}</div>`
+          : '';
         return `<div class="zzq-row"><span>${esc(p.name || (p.robot ? '人机' : '玩家' + p.seat))}${gen ? '·' + esc(gen.name) : ''}${p.equips ? ' <small style="color:#6f7688">装备' + p.equips + '</small>' : ''}</span>
-          <span><b style="color:#e8c46a">${p.hp}</b> 血 · ${p.level} 级 ${tag}</span></div>`;
+          <span><b style="color:#e8c46a">${p.hp}</b> 血 · ${p.level} 级 ${tag}</span></div>` + seenHtml;
       }).join('') +
-      `<div class="zzq-op">客户端不给对手阵容，所以这里按血量/等级判断谁最危险、谁快出局。</div>` +
+      `<div class="zzq-op">对手阵容来自和他交手时的记录（每局重新积累），没交过手的显示未知；威胁/可送走按血量和等级判断。</div>` +
       (a.pool && a.pool.length ? `<div class="zzq-op">牌池：${a.pool.map(x => `${esc(x.name)} ${x.rank}★ 池中${x.total}张(你${x.have})`).join('、')}</div>` : '')) : '';
 
     // —— 阵容库（官方数据）
